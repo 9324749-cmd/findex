@@ -1,0 +1,48 @@
+FINDEX — ЯК ЗАПУСТИТИ ПРОЄКТ (Windows)
+
+1. Розпакуй findex_lab01.zip у зручну папку.
+2. Встанови Python 3.12 або новіший та uv.
+3. Відкрий папку findex_lab01 у VS Code.
+4. Відкрий Terminal -> New Terminal.
+5. Виконай команди по черзі:
+
+   uv sync
+   python scripts/generate_corpus.py
+   uv run pytest -q
+   uv run python -m findex.stats data/ --compare
+   uv run ruff check .
+   uv run ruff format --check .
+
+У ZIP уже є демонстраційний каталог data/ із 1000 текстовими файлами, тому
+генератор повторно запускати необов'язково. Якщо запустиш його ще раз, файли
+корпусу буде створено заново.
+
+ЯК ЗДАТИ НА GITHUB
+
+1. Створи новий PUBLIC repository з назвою findex (не додавай README, .gitignore
+   чи license на GitHub, бо ці файли вже є в папці проєкту).
+2. У терміналі VS Code переконайся, що відкрита папка проєкту, і виконай:
+
+   git init
+   git add .
+   git commit -m "Lab 1: streaming corpus and tokenizer"
+   git branch -M main
+   git remote add origin https://github.com/ТВІЙ_ЛОГІН/findex.git
+   git push -u origin main
+   git tag lab-01
+   git push origin lab-01
+
+ВАЖЛИВО: data/ додано до .gitignore. Тому 1000 текстових файлів не будуть
+завантажені на GitHub. У README описано, як відтворити корпус.
+
+ПЕРЕД ЗАХИСТОМ
+
+- Покажи структуру src/findex/.
+- Покажи, що iter_documents() і tokenize() є генераторами.
+- Запусти статистику: uv run python -m findex.stats data/ --limit 10
+- Покажи тести: uv run pytest -q
+- Поясни, що eager-версія зберігає списки документів і токенів, а lazy-версія
+  передає дані поступово. Counter все одно займає пам'ять, бо зберігає частоти.
+
+Увага: цей проєкт є навчальною основою. Перед захистом переглянь код і переконайся,
+що можеш своїми словами пояснити функції та рішення.
