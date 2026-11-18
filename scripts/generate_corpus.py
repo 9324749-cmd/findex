@@ -1,35 +1,25 @@
-"""Create a reproducible local demonstration corpus (not committed to Git)."""
-
 from pathlib import Path
 
-ROOT = Path("data")
-PARAGRAPHS = [
-    "Python підтримує ітератори, генератори та послідовну обробку текстових даних.",
-    "Пошукова система аналізує документи, виділяє терми та зберігає статистику.",
-    "Unicode-нормалізація допомагає порівнювати текст із різними способами кодування.",
-    "Генератор повертає наступний елемент лише тоді, коли його запитує споживач.",
-    "Модуль pathlib забезпечує зручну роботу з файлами та каталогами.",
-    "Регулярні вирази дають змогу знаходити слова, числа та інші текстові шаблони.",
-    "Лінивий конвеєр зменшує потребу зберігати всі проміжні результати в пам'яті.",
-    "Лічильник термів накопичує частоти слів для подальшого пошуку й ранжування.",
-    "Тестування перевіряє правила токенізації на українських та англійських прикладах.",
-    "Вимірювання часу й пам'яті допомагає порівнювати різні реалізації алгоритму.",
+OUT = Path("data")
+OUT.mkdir(exist_ok=True)
+
+samples = [
+    "Python використовує словники для швидкого пошуку даних.",
+    "Інвертований індекс пов'язує кожен термін із документами.",
+    "Generators process documents lazily and reduce temporary memory.",
+    "Hash tables use hash values to find keys efficiently.",
+    "Boolean search supports AND OR and NOT operations.",
+    "Текстова обробка починається з нормалізації та токенізації.",
+    "A document contains words, terms, and useful metadata.",
+    "Пошукова система знаходить документи за ключовими словами.",
 ]
 
+for i in range(1, 1001):
+    text = samples[(i - 1) % len(samples)]
+    # Repeat content in a deterministic pattern so the corpus is reproducible.
+    (OUT / f"doc_{i:04d}.txt").write_text(
+        f"Документ {i}. {text} {samples[i % len(samples)]}\n",
+        encoding="utf-8",
+    )
 
-def main() -> None:
-    ROOT.mkdir(exist_ok=True)
-    count = 1000
-    for index in range(1, count + 1):
-        # Deterministic variety: each document contains a different rotation.
-        lines = [f"Документ {index}. Навчальний корпус findex."]
-        for offset in range(len(PARAGRAPHS)):
-            lines.append(PARAGRAPHS[(index + offset) % len(PARAGRAPHS)])
-        (ROOT / f"document_{index:04d}.txt").write_text(
-            "\n".join(lines) + "\n", encoding="utf-8"
-        )
-    print(f"Created {count} UTF-8 text documents in {ROOT}/")
-
-
-if __name__ == "__main__":
-    main()
+print(f"Створено {len(list(OUT.glob('*.txt')))} документів у {OUT}/")

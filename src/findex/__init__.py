@@ -1,3 +1,1 @@
-"""Findex: a streaming corpus intake prototype."""
-
-__version__ = "0.1.0"
+"""findex: a small educational text-search project."""
