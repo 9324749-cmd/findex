@@ -1,0 +1,21 @@
+query,scorer,hits,precision_at_5
+словники швидкого,TF-IDF,5,1.0
+словники швидкого,BM25,5,1.0
+інвертований індекс,TF-IDF,5,1.0
+інвертований індекс,BM25,5,1.0
+generators lazily,TF-IDF,5,1.0
+generators lazily,BM25,5,1.0
+hash tables,TF-IDF,5,1.0
+hash tables,BM25,5,1.0
+boolean search,TF-IDF,5,1.0
+boolean search,BM25,5,1.0
+нормалізації токенізації,TF-IDF,5,1.0
+нормалізації токенізації,BM25,5,1.0
+document metadata,TF-IDF,5,1.0
+document metadata,BM25,5,1.0
+пошукова система,TF-IDF,5,1.0
+пошукова система,BM25,5,1.0
+ключовими словами,TF-IDF,5,1.0
+ключовими словами,BM25,5,1.0
+terms metadata,TF-IDF,5,1.0
+terms metadata,BM25,5,1.0

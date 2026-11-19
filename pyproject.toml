@@ -1,16 +1,16 @@
-[project]
-name = "findex"
-version = "0.2.0"
-description = "Educational text search engine with an inverted index"
-requires-python = ">=3.12"
-dependencies = []
-
-[dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.6"]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[project]
+name = "findex"
+version = "0.3.0"
+description = "Навчальна пошукова система findex: індекс, Boolean-пошук і ранжування"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/findex"]
@@ -21,3 +21,4 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+target-version = "py311"

@@ -1,0 +1,11 @@
+query,relevant_ids
+словники швидкого,doc_1000.txt;doc_0993.txt;doc_0992.txt;doc_0985.txt;doc_0984.txt
+інвертований індекс,doc_0994.txt;doc_0993.txt;doc_0986.txt;doc_0985.txt;doc_0978.txt;doc_0977.txt;doc_0969.txt;doc_0961.txt
+generators lazily,doc_0995.txt;doc_0994.txt;doc_0987.txt;doc_0986.txt;doc_0979.txt;doc_0978.txt;doc_0970.txt;doc_0962.txt
+hash tables,doc_0996.txt;doc_0995.txt;doc_0988.txt;doc_0987.txt;doc_0980.txt
+boolean search,doc_0997.txt;doc_0996.txt;doc_0989.txt;doc_0988.txt;doc_0981.txt;doc_0973.txt;doc_0965.txt
+нормалізації токенізації,doc_0998.txt;doc_0997.txt;doc_0990.txt;doc_0989.txt;doc_0982.txt
+document metadata,doc_0999.txt;doc_0998.txt;doc_0991.txt;doc_0990.txt;doc_0983.txt
+пошукова система,doc_1000.txt;doc_0999.txt;doc_0992.txt;doc_0991.txt;doc_0984.txt;doc_0976.txt;doc_0968.txt
+ключовими словами,doc_1000.txt;doc_0999.txt;doc_0992.txt;doc_0991.txt;doc_0984.txt;doc_0976.txt;doc_0968.txt
+terms metadata,doc_0999.txt;doc_0998.txt;doc_0991.txt;doc_0990.txt;doc_0983.txt

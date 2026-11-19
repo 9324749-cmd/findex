@@ -1,96 +1,138 @@
-"""Build and persist an inverted index from the Lab 1 lazy corpus pipeline."""
+"""Побудова індексу, Python Mapping API та контекстне відкриття."""
 from __future__ import annotations
-
-import argparse
-import time
-import tracemalloc
 from collections import Counter, defaultdict
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from functools import cached_property
 from pathlib import Path
+import json, pickle, time, logging
+from .corpus import iter_documents
+from .models import DocMeta, Posting
+from .tokenize import tokenize_with_positions
+from .decorators import timed
 
-from findex.corpus import iter_documents
-from findex.tokenize import tokenize
-from findex.models import DocMeta, IndexData, Posting
-from findex.store import save_index
+log = logging.getLogger(__name__)
 
+class Index(Mapping[str, tuple[Posting, ...]]):
+    def __init__(self, postings: dict[str, tuple[Posting, ...]], documents: dict[str, DocMeta], texts: dict[str, str] | None = None):
+        self._postings = {term: tuple(items) for term, items in postings.items()}
+        self.documents = dict(documents)
+        self.texts = dict(texts or {})
+        self._closed = False
 
-def _numeric_doc_id(raw_id: object, fallback: int) -> int:
-    """Use a numeric Lab 1 ID when available; otherwise use stream order."""
-    try:
-        return int(raw_id)
-    except (TypeError, ValueError):
-        return fallback
+    def __getitem__(self, term: str) -> tuple[Posting, ...]:
+        return self._postings[term]
 
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._postings)
 
-def build_index(root: str | Path, *, positions: bool = False) -> IndexData:
-    """Build postings in one pass; only the current document is token-buffered."""
-    postings: defaultdict[str, list[Posting]] = defaultdict(list)
-    doc_lengths: dict[int, int] = {}
-    doc_meta: dict[int, DocMeta] = {}
+    def __len__(self) -> int:
+        return len(self._postings)
 
-    for ordinal, document in enumerate(iter_documents(root), start=1):
-        doc_id = _numeric_doc_id(getattr(document, "doc_id", ordinal), ordinal)
-        path = str(getattr(document, "path", ""))
-        title = Path(path).stem if path else f"Document {doc_id}"
-        counts: Counter[str] = Counter()
-        token_positions: defaultdict[str, list[int]] = defaultdict(list)
+    def __contains__(self, term: object) -> bool:
+        return term in self._postings
 
-        for offset, term in enumerate(tokenize(document.text)):
-            counts[term] += 1
-            if positions:
-                token_positions[term].append(offset)
+    def __repr__(self) -> str:
+        return f"Index(terms={len(self)}, docs={self.num_docs})"
 
-        doc_lengths[doc_id] = sum(counts.values())
-        doc_meta[doc_id] = DocMeta(doc_id=doc_id, path=path, title=title)
+    @property
+    def num_docs(self) -> int:
+        return len(self.documents)
 
+    @cached_property
+    def avg_doc_length(self) -> float:
+        if not self.documents:
+            return 0.0
+        return sum(meta.length for meta in self.documents.values()) / self.num_docs
+
+    def doc_length(self, doc_id: str) -> int:
+        return self.documents[doc_id].length
+
+    def df(self, term: str) -> int:
+        return len(self._postings.get(term, ()))
+
+    def close(self) -> None:
+        """Звільняє пам’ять індексу та робить об’єкт закритим."""
+        if not self._closed:
+            self._postings.clear()
+            self.documents.clear()
+            self.texts.clear()
+            self.__dict__.pop("avg_doc_length", None)
+            self._closed = True
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+@timed
+def build_index(corpus_dir: str | Path, *, store_positions: bool = True) -> Index:
+    posting_build: dict[str, list[Posting]] = defaultdict(list)
+    documents: dict[str, DocMeta] = {}
+    texts: dict[str, str] = {}
+    for doc in iter_documents(corpus_dir):
+        pairs = list(tokenize_with_positions(doc.text))
+        counts = Counter(token for token, _ in pairs)
+        positions: dict[str, list[int]] = defaultdict(list)
+        if store_positions:
+            for token, pos in pairs:
+                positions[token].append(pos)
+        title = Path(doc.doc_id).stem.replace("_", " ").replace("-", " ")
+        documents[doc.doc_id] = DocMeta(doc.doc_id, doc.path, title, len(pairs))
+        texts[doc.doc_id] = doc.text
         for term, tf in counts.items():
-            term_positions = tuple(token_positions[term]) if positions else ()
-            postings[term].append(Posting(doc_id=doc_id, tf=tf, positions=term_positions))
+            posting_build[term].append(Posting(doc.doc_id, tf, tuple(positions[term]) if store_positions else ()))
+    postings = {term: tuple(sorted(items, key=lambda p: p.doc_id)) for term, items in posting_build.items()}
+    return Index(postings, documents, texts)
 
-    # The stream may not have arrived in ID order; enforce the required ordering.
-    sorted_postings = {
-        term: sorted(items, key=lambda item: item.doc_id)
-        for term, items in postings.items()
-    }
-    return IndexData(
-        postings=sorted_postings,
-        doc_lengths=doc_lengths,
-        doc_meta=doc_meta,
-        positions_enabled=positions,
-    )
+def save_index(index: Index, path: str | Path, fmt: str | None = None) -> Path:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fmt = (fmt or target.suffix.lstrip(".") or "pickle").lower()
+    payload = {"postings": {t: [{"doc_id": p.doc_id, "tf": p.tf, "positions": list(p.positions)} for p in ps] for t, ps in index.items()},
+               "documents": {k: {"doc_id": v.doc_id, "path": v.path, "title": v.title, "length": v.length} for k, v in index.documents.items()},
+               "texts": index.texts}
+    if fmt in {"pickle", "pkl", "bin"}:
+        with target.open("wb") as f: pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+    elif fmt == "json":
+        target.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    else:
+        raise ValueError("Формат має бути pickle або json")
+    return target
+
+@timed
+def load_index(path: str | Path) -> Index:
+    target = Path(path)
+    if target.suffix.lower() == ".json":
+        payload = json.loads(target.read_text(encoding="utf-8"))
+    else:
+        # Завантажуйте pickle лише з довірених джерел: pickle не є безпечним форматом для чужих файлів.
+        with target.open("rb") as f:
+            payload = pickle.load(f)
+    postings = {t: tuple(Posting(p["doc_id"], int(p["tf"]), tuple(p.get("positions", ()))) for p in ps) for t, ps in payload["postings"].items()}
+    documents = {k: DocMeta(**v) for k, v in payload["documents"].items()}
+    index = Index(postings, documents, payload.get("texts", {}))
+    return index
+
+@contextmanager
+def open_index(path: str | Path):
+    index = load_index(path)
+    try:
+        yield index
+    finally:
+        index.close()
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Build and save the findex inverted index.")
-    parser.add_argument("corpus", help="Path to the Lab 1 data/ corpus")
-    parser.add_argument("--out", default="index.bin", help="Output index file")
-    parser.add_argument("--format", choices=("pickle", "json"), default=None,
-                        help="Storage format (default: inferred from .json suffix or pickle)")
-    parser.add_argument("--positions", action="store_true",
-                        help="Store token offsets for optional phrase-search work")
-    args = parser.parse_args()
-
-    fmt = args.format or ("json" if Path(args.out).suffix.lower() == ".json" else "pickle")
-
-    tracemalloc.start()
-    started = time.perf_counter()
-    index = build_index(args.corpus, positions=args.positions)
-    build_seconds = time.perf_counter() - started
-    _, build_peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-
-    save_started = time.perf_counter()
-    save_index(index, args.out, fmt=fmt)
-    save_seconds = time.perf_counter() - save_started
-    size = Path(args.out).stat().st_size
-
-    print(f"Documents: {len(index.doc_meta)}")
-    print(f"Terms: {len(index.postings)}")
-    print(f"Build time: {build_seconds:.6f} s")
-    print(f"Build peak memory: {build_peak / 1024 / 1024:.3f} MiB")
-    print(f"Save time ({fmt}): {save_seconds:.6f} s")
-    print(f"File size: {size / 1024:.2f} KiB")
-    print(f"Saved to: {args.out}")
-
+def main(argv=None):
+    import argparse
+    parser = argparse.ArgumentParser(description="Побудова інвертованого індексу findex")
+    parser.add_argument("corpus", nargs="?", default="data/")
+    parser.add_argument("--out", default="index.bin")
+    parser.add_argument("--format", choices=["pickle", "json"], default="pickle")
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    index = build_index(args.corpus)
+    save_index(index, args.out, args.format)
+    print(index)
 
 if __name__ == "__main__":
     main()

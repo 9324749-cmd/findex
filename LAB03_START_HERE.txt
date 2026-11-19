@@ -1,0 +1,16 @@
+ЛАБОРАТОРНА РОБОТА №3 — ПОЧАТОК
+
+1. Розпакуй архів і відкрий папку findex_lab03_complete у VS Code.
+2. Якщо маєш локальну папку data/ з лабораторних №1–2, скопіюй її в корінь проєкту. Не завантажуй data/ на GitHub.
+3. Відкрий Terminal -> New Terminal.
+4. Виконай: uv sync --extra dev
+5. Перевір тести: uv run pytest -q
+6. Якщо data/ ще немає, створи той самий стандартний корпус лабораторних №1–2: uv run python scripts/generate_corpus.py
+7. Побудуй індекс: uv run python -c "from findex.index import build_index, save_index; ix=build_index('data/'); save_index(ix,'index.bin'); print(ix)"
+8. Перевір пошук: uv run python -m findex.search index.bin 'python AND (словники OR "інвертований індекс")' -k 5
+9. Перевір три властивості BM25: uv run python -m findex.sanity index.bin
+10. Для стандартного корпусу judgments.csv і precision_at_5.csv уже заповнені результатами. Якщо твій data/ інший, запусти ручну перевірку: uv run python -m findex.judge index.bin --judgments judgments.csv
+11. Після ручної перевірки обчисли таблицю: uv run python -m findex.benchmark index.bin --judgments judgments.csv --out precision_at_5.csv
+12. Запусти демонстрацію таймера й кешу: uv run python -m findex.trace_demo index.bin --query "python AND словники"
+
+Не завантажуй __pycache__, .venv, data/, index.bin або інші локальні файли індексу до GitHub.

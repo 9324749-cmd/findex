@@ -1,17 +1,15 @@
-from __future__ import annotations
-
+"""Нормалізація й потокова токенізація."""
 import re
 import unicodedata
 from collections.abc import Iterator
 
-_TOKEN_PATTERN = re.compile(
-    r"[^\W_]+(?:['’ʼ-][^\W_]+)*",
-    flags=re.UNICODE,
-)
+_TOKEN_RE = re.compile(r"[^\W_]+(?:['’ʼ-][^\W_]+)*", re.UNICODE)
 
+def tokenize_with_positions(text: str) -> Iterator[tuple[str, int]]:
+    normalized = unicodedata.normalize("NFC", text).casefold()
+    for position, match in enumerate(_TOKEN_RE.finditer(normalized)):
+        yield match.group(0), position
 
 def tokenize(text: str) -> Iterator[str]:
-    """Yield normalized Unicode words, numbers, internal apostrophes and hyphens."""
-    normalized = unicodedata.normalize("NFC", text).casefold()
-    for match in _TOKEN_PATTERN.finditer(normalized):
-        yield match.group(0)
+    for token, _ in tokenize_with_positions(text):
+        yield token

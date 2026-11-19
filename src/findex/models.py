@@ -1,32 +1,15 @@
-"""Data models used by the inverted index."""
-from __future__ import annotations
-
+"""Незмінні моделі даних інвертованого індексу."""
 from dataclasses import dataclass
 
-
-@dataclass(frozen=True, slots=True, order=True)
+@dataclass(frozen=True, slots=True)
 class Posting:
-    """One term occurrence summary for a document."""
-
-    doc_id: int
+    doc_id: str
     tf: int
     positions: tuple[int, ...] = ()
 
-
 @dataclass(frozen=True, slots=True)
 class DocMeta:
-    """Small display metadata for one indexed document."""
-
-    doc_id: int
+    doc_id: str
     path: str
     title: str
-
-
-@dataclass(slots=True)
-class IndexData:
-    """Complete in-memory inverted index."""
-
-    postings: dict[str, list[Posting]]
-    doc_lengths: dict[int, int]
-    doc_meta: dict[int, DocMeta]
-    positions_enabled: bool = False
+    length: int
