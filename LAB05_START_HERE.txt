@@ -1,0 +1,33 @@
+ЛАБОРАТОРНА РОБОТА 5 — КОНКУРЕНТНІСТЬ І GIL
+
+У цьому архіві вже є реалізація build_partial()/merge(), режими serial/threads/processes,
+тести лабораторної 5, скрипти benchmark і GIL-демонстрації, а також фактичні результати
+одного повного benchmark на корпусі з 1000 документів:
+  benchmark_results.csv
+  docs/speedup.png
+  docs/gil-reflection.md
+
+Щоб повторити роботу локально:
+1. Встановіть залежності: uv sync --all-groups
+2. Створіть корпус: uv run python scripts/generate_corpus.py
+3. Запустіть тести: uv run pytest -q
+4. Запустіть benchmark (не менше трьох повторів):
+   uv run python scripts/benchmark_concurrency.py data --repeats 3
+5. Перевірте GIL і гонитву даних:
+   uv run python scripts/gil_probe.py
+6. Встановіть free-threaded Python 3.13t і повторіть експеримент:
+   uv python install 3.13t
+   uv run --python 3.13t python scripts/gil_probe.py
+   uv run --python 3.13t python scripts/benchmark_concurrency.py data --repeats 3 --output benchmark_313t.csv --plot docs/speedup_313t.png
+
+Фактичні обмеження середовища підготовки архіву:
+- 7 тестів лабораторної 5 пройшли.
+- 18 тестів лабораторних 3 і 5 пройшли без тестового модуля lab04.
+- Повний набір тестів не вдалося зібрати: відсутній Hypothesis, а доступ до PyPI недоступний.
+- Python 3.13.5 повідомив sys._is_gil_enabled() == True.
+- Встановлення Python 3.13t не завершилося через недоступність GitHub у середовищі.
+- Ruff, Pyright і збирання wheel не виконувалися: інструменти не встановлені, мережа недоступна.
+
+Не вигадуйте результати 3.13t або інші показники. Під час захисту поясніть, що на
+невеликому корпусі накладні витрати процесів перевищили виграш від паралельної роботи.
+Повні фактичні дані та пояснення див. у README.md і docs/gil-reflection.md.

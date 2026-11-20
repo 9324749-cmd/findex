@@ -1,13 +1,15 @@
 """Побудова індексу, Python Mapping API та контекстне відкриття."""
 from __future__ import annotations
 from collections import Counter, defaultdict
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
+from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
+import multiprocessing
 from typing import Literal
 from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
 import json, pickle, time, logging
-from .corpus import iter_documents
+from .corpus import Document, iter_documents
 from .models import DocMeta, Posting
 from .tokenize import tokenize_with_positions
 from .decorators import timed
@@ -65,25 +67,96 @@ class Index(Mapping[str, tuple[Posting, ...]]):
     def closed(self) -> bool:
         return self._closed
 
-@timed
-def build_index(corpus_dir: str | Path, *, store_positions: bool = True) -> Index:
+def _index_documents(documents_iter: Iterable[Document], *, store_positions: bool = True) -> Index:
+    """Build an index from an iterable of Document-like objects."""
     posting_build: dict[str, list[Posting]] = defaultdict(list)
     documents: dict[str, DocMeta] = {}
     texts: dict[str, str] = {}
-    for doc in iter_documents(corpus_dir):
-        pairs = list(tokenize_with_positions(doc.text))
+    for doc in documents_iter:
+        doc_id = doc.doc_id
+        text = doc.text
+        doc_path = doc.path
+        pairs = list(tokenize_with_positions(text))
         counts = Counter(token for token, _ in pairs)
         positions: dict[str, list[int]] = defaultdict(list)
         if store_positions:
             for token, pos in pairs:
                 positions[token].append(pos)
-        title = Path(doc.doc_id).stem.replace("_", " ").replace("-", " ")
-        documents[doc.doc_id] = DocMeta(doc.doc_id, doc.path, title, len(pairs))
-        texts[doc.doc_id] = doc.text
+        title = Path(doc_id).stem.replace("_", " ").replace("-", " ")
+        documents[doc_id] = DocMeta(doc_id, doc_path, title, len(pairs))
+        texts[doc_id] = text
         for term, tf in counts.items():
-            posting_build[term].append(Posting(doc.doc_id, tf, tuple(positions[term]) if store_positions else ()))
-    postings = {term: tuple(sorted(items, key=lambda p: p.doc_id)) for term, items in posting_build.items()}
+            posting_build[term].append(Posting(doc_id, tf, tuple(positions[term]) if store_positions else ()))
+    postings = {term: tuple(sorted(items, key=lambda posting: posting.doc_id)) for term, items in posting_build.items()}
     return Index(postings, documents, texts)
+
+
+def build_partial(paths: list[str], corpus_root: str, store_positions: bool = True) -> Index:
+    """Module-level worker: read only the supplied paths and build one partial index.
+
+    Paths, rather than pre-read document texts, cross the executor boundary. This
+    keeps task arguments small and makes the function safe for multiprocessing spawn.
+    """
+    root = Path(corpus_root)
+    def read_documents() -> Iterator[Document]:
+        for raw_path in paths:
+            path = Path(raw_path)
+            try:
+                content = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                content = path.read_text(encoding="utf-8", errors="replace")
+            yield Document(path.relative_to(root).as_posix(), str(path), content)
+    return _index_documents(read_documents(), store_positions=store_positions)
+
+
+def merge(partials: Iterable[Index]) -> Index:
+    """Merge partial indexes; duplicate document IDs are rejected, never overwritten."""
+    postings: dict[str, list[Posting]] = defaultdict(list)
+    documents: dict[str, DocMeta] = {}
+    texts: dict[str, str] = {}
+    for partial in partials:
+        overlap = documents.keys() & partial.documents.keys()
+        if overlap:
+            raise ValueError(f"Повторні doc_id під час merge: {sorted(overlap)[:3]}")
+        documents.update(partial.documents)
+        texts.update(partial.texts)
+        for term, items in partial.items():
+            postings[term].extend(items)
+    merged = {term: tuple(sorted(items, key=lambda posting: posting.doc_id)) for term, items in postings.items()}
+    return Index(merged, documents, texts)
+
+
+@timed
+def build_index(
+    corpus_dir: str | Path,
+    *,
+    store_positions: bool = True,
+    workers: int = 1,
+    executor: Literal["serial", "threads", "processes"] = "serial",
+) -> Index:
+    """Build the same index serially, with threads, or with worker processes."""
+    root = Path(corpus_dir)
+    if not root.exists():
+        raise FileNotFoundError(f"Корпус не знайдено: {root}")
+    if workers < 1:
+        raise ValueError("workers має бути не менше 1")
+    if executor not in {"serial", "threads", "processes"}:
+        raise ValueError("executor має бути serial, threads або processes")
+    paths = sorted(str(path) for path in root.rglob("*") if path.is_file() and path.suffix.lower() in {".txt", ".md"})
+    if not paths:
+        return Index({}, {}, {})
+    if executor == "serial":
+        return merge([build_partial(paths, str(root), store_positions)])
+    chunk_size = (len(paths) + workers - 1) // workers
+    chunks = [paths[i:i + chunk_size] for i in range(0, len(paths), chunk_size)]
+    pool_type = ThreadPoolExecutor if executor == "threads" else ProcessPoolExecutor
+    # Exceptions from a worker are re-raised by future.result(); executor shutdown
+    # waits for remaining tasks and no silent partial index is returned.
+    pool_options = {"mp_context": multiprocessing.get_context("spawn")} if executor == "processes" else {}
+    with pool_type(max_workers=workers, **pool_options) as pool:
+        futures = [pool.submit(build_partial, chunk, str(root), store_positions) for chunk in chunks]
+        partials = [future.result() for future in futures]
+    return merge(partials)
 
 def save_index(index: Index, path: str | Path, fmt: Literal["pickle", "pkl", "bin", "json"] | None = None) -> Path:
     target = Path(path)

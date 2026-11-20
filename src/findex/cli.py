@@ -37,6 +37,8 @@ def index_command(
     corpus: Annotated[Path, typer.Argument(help="Каталог із .txt/.md документами")]=Path("data"),
     output: Annotated[Path, typer.Option("--out", "-o", help="Файл індексу")]=Path("index.bin"),
     fmt: Annotated[Literal["pickle", "json"], typer.Option("--format", help="pickle або json")]= "pickle",
+    workers: Annotated[int, typer.Option("--workers", min=1, help="Кількість воркерів")]=1,
+    executor: Annotated[Literal["serial", "threads", "processes"], typer.Option("--executor", help="serial, threads або processes")]= "serial",
 ) -> None:
     """Створити та зберегти інвертований індекс."""
     try:
@@ -44,10 +46,10 @@ def index_command(
             raise FileNotFoundError(f"Корпус не знайдено: {corpus}")
         with Progress(SpinnerColumn(), TextColumn("Індексація…"), BarColumn(), TimeElapsedColumn(), console=console) as progress:
             task = progress.add_task("index", total=None)
-            index = build_index(corpus)
+            index = build_index(corpus, workers=workers, executor=executor)
             progress.update(task, completed=1, total=1)
         save_index(index, output, fmt)
-        console.print(f"[green]Готово:[/green] {index}; файл: {output}")
+        console.print(f"[green]Готово:[/green] {index}; виконавець: {executor}; воркерів: {workers}; файл: {output}")
     except (OSError, ValueError) as exc:
         typer.echo(f"Помилка: {exc}", err=True)
         raise typer.Exit(code=1) from None
