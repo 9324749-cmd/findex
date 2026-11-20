@@ -1,0 +1,28 @@
+ЛАБОРАТОРНА РОБОТА 4 — findex
+
+У папці є вихідний код лабораторних 1–3, оновлений CLI, тести, конфігурація проєкту та GitHub Actions.
+
+ШВИДКИЙ ЗАПУСК (потрібен інтернет):
+1. Відкрийте цю папку в терміналі.
+2. Встановіть uv і Python 3.11 або новіший.
+3. Виконайте: uv lock
+4. Виконайте: uv sync --all-groups
+5. Перевірте стиль: uv run ruff check src tests
+6. Перевірте типи: uv run pyright
+7. Запустіть тести: uv run pytest --cov=findex --cov-report=term-missing
+8. Перевірте CLI: uv run findex --help
+9. Створіть індекс: uv run findex index data --out index.bin
+10. Виконайте пошук: uv run findex search "python AND async" --index index.bin
+11. Статистика: uv run findex stats --index index.bin
+12. Створіть wheel: uv build
+
+ВАЖЛИВО ПРО ПЕРЕВІРКУ:
+- У цьому середовищі немає доступу до PyPI, тому uv.lock не вдалося згенерувати.
+- Без встановленого Hypothesis три property-based тести не запускаються. Після uv sync вони мають бути виконані справжнім Hypothesis.
+- У доступному офлайн-середовищі виконано 54 звичайні тести успішно; 3 Hypothesis-тести пропущені лише через відсутність пакета. Цей запуск не замінює повний запуск після uv sync.
+- Фактичний відсоток coverage та результат pyright strict потрібно отримати командами вище; значення навмисно не вигадано.
+
+GITHUB:
+- Запуште зміни у той самий репозиторій.
+- Після успішного CI створіть тег lab-04.
+- Створіть GitHub Release v0.4.0 і прикріпіть файл dist/*.whl.

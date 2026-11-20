@@ -1,7 +1,8 @@
 """TF-IDF/BM25 ранжування, кеш запитів і снипети."""
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, Literal
+from collections.abc import Sequence
 from functools import lru_cache
 from collections import OrderedDict
 from heapq import nlargest
@@ -10,23 +11,25 @@ from collections import Counter
 import re, logging
 from .decorators import timed
 from .query import parse
+from .models import Posting
+from .index import Index
 from .tokenize import tokenize
 
 class Scorer(Protocol):
-    def __call__(self, term: str, posting, index) -> float: ...
+    def __call__(self, term: str, posting: Posting, index: Index) -> float: ...
 
 class TfIdf:
-    def __call__(self, term, posting, index):
+    def __call__(self, term: str, posting: Posting, index: Index) -> float:
         tf = posting.tf
         idf = log((index.num_docs + 1) / (index.df(term) + 1)) + 1.0
         return (1.0 + log(tf)) * idf
-    def __repr__(self): return "TfIdf()"
+    def __repr__(self) -> str: return "TfIdf()"
 
 class BM25:
-    def __init__(self, k1: float = 1.5, b: float = 0.75):
+    def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
         if k1 <= 0 or not 0 <= b <= 1: raise ValueError("Потрібно k1 > 0 та 0 <= b <= 1")
         self.k1, self.b = k1, b
-    def __call__(self, term, posting, index):
+    def __call__(self, term: str, posting: Posting, index: Index) -> float:
         n, df, tf = index.num_docs, index.df(term), posting.tf
         if not n: return 0.0
         idf = log(1 + (n - df + 0.5) / (df + 0.5))
@@ -34,7 +37,7 @@ class BM25:
         avg = index.avg_doc_length or 1.0
         norm = tf + self.k1 * (1 - self.b + self.b * length / avg)
         return idf * (tf * (self.k1 + 1)) / norm
-    def __repr__(self): return f"BM25(k1={self.k1}, b={self.b})"
+    def __repr__(self) -> str: return f"BM25(k1={self.k1}, b={self.b})"
 
 @dataclass(order=True, frozen=True, init=False)
 class SearchResult:
@@ -48,7 +51,7 @@ class SearchResult:
         object.__setattr__(self, "doc_id", doc_id)
         object.__setattr__(self, "title", title)
         object.__setattr__(self, "snippet", snippet)
-    def __str__(self): return f"{self.title} [{self.doc_id}] score={self.score:.4f}: {self.snippet}"
+    def __str__(self) -> str: return f"{self.title} [{self.doc_id}] score={self.score:.4f}: {self.snippet}"
 
 _INDEX_REGISTRY = OrderedDict()
 
@@ -57,7 +60,7 @@ def _cached_ids(index_id: int, query_text: str, engine: str, signature: tuple) -
     index = _INDEX_REGISTRY[index_id]
     return frozenset(parse(query_text).evaluate(index, engine))
 
-def _matched_ids(index, query_text, engine="set"):
+def _matched_ids(index: Index, query_text: str, engine: Literal["merge", "set"] = "set") -> set[str]:
     index_id = id(index)
     _INDEX_REGISTRY[index_id] = index
     _INDEX_REGISTRY.move_to_end(index_id)
@@ -84,7 +87,7 @@ def make_snippet(text: str, terms: set[str], window: int = 80) -> str:
     return ("…" if start else "") + snippet + ("…" if end < len(text) else "")
 
 @timed
-def search(index, query: str, scorer: Scorer | None = None, k: int = 10, engine: str = "set") -> list[SearchResult]:
+def search(index: Index, query: str, scorer: Scorer | None = None, k: int = 10, engine: Literal["merge", "set"] = "set") -> list[SearchResult]:
     scorer = scorer or BM25()
     matched = _matched_ids(index, query, engine)
     clean_query = re.sub(r"\b(?:AND|OR|NOT)\b", " ", query, flags=re.IGNORECASE)

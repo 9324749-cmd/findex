@@ -1,5 +1,18 @@
-from .index import build_index, save_index
+"""Сумісний допоміжний CLI для побудови індексу."""
 import argparse
-def main():
- p=argparse.ArgumentParser(); p.add_argument("corpus", nargs="?", default="data/"); p.add_argument("--out", default="index.bin"); p.add_argument("--format", choices=["pickle","json"], default="pickle"); a=p.parse_args(); ix=build_index(a.corpus); save_index(ix,a.out,a.format); print(ix)
-if __name__ == "__main__": main()
+import logging
+from .index import build_index, save_index
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("corpus", nargs="?", default="data/")
+    parser.add_argument("--out", default="index.bin")
+    parser.add_argument("--format", choices=["pickle", "json"], default="pickle")
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    index = build_index(args.corpus)
+    save_index(index, args.out, args.format)
+    logging.info("Побудовано індекс: %s", index)
+
+if __name__ == "__main__":
+    main()

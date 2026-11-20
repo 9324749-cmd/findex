@@ -3,7 +3,7 @@ import re
 import unicodedata
 from collections.abc import Iterator
 
-_TOKEN_RE = re.compile(r"[^\W_]+(?:['’ʼ-][^\W_]+)*", re.UNICODE)
+_TOKEN_RE = re.compile(r"[^\W_]+(?:['’ʼ][^\W_]+)*", re.UNICODE)
 
 def tokenize_with_positions(text: str) -> Iterator[tuple[str, int]]:
     normalized = unicodedata.normalize("NFC", text).casefold()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 from collections import Counter, defaultdict
 from collections.abc import Iterator, Mapping
+from typing import Literal
 from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
@@ -14,7 +15,7 @@ from .decorators import timed
 log = logging.getLogger(__name__)
 
 class Index(Mapping[str, tuple[Posting, ...]]):
-    def __init__(self, postings: dict[str, tuple[Posting, ...]], documents: dict[str, DocMeta], texts: dict[str, str] | None = None):
+    def __init__(self, postings: dict[str, tuple[Posting, ...]], documents: dict[str, DocMeta], texts: dict[str, str] | None = None) -> None:
         self._postings = {term: tuple(items) for term, items in postings.items()}
         self.documents = dict(documents)
         self.texts = dict(texts or {})
@@ -84,7 +85,7 @@ def build_index(corpus_dir: str | Path, *, store_positions: bool = True) -> Inde
     postings = {term: tuple(sorted(items, key=lambda p: p.doc_id)) for term, items in posting_build.items()}
     return Index(postings, documents, texts)
 
-def save_index(index: Index, path: str | Path, fmt: str | None = None) -> Path:
+def save_index(index: Index, path: str | Path, fmt: Literal["pickle", "pkl", "bin", "json"] | None = None) -> Path:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     fmt = (fmt or target.suffix.lstrip(".") or "pickle").lower()
@@ -114,7 +115,7 @@ def load_index(path: str | Path) -> Index:
     return index
 
 @contextmanager
-def open_index(path: str | Path):
+def open_index(path: str | Path) -> Iterator[Index]:
     index = load_index(path)
     try:
         yield index
@@ -132,7 +133,7 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     index = build_index(args.corpus)
     save_index(index, args.out, args.format)
-    print(index)
+    log.info("Побудовано індекс: %s", index)
 
 if __name__ == "__main__":
     main()

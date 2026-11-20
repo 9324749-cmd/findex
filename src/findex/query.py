@@ -1,10 +1,12 @@
 """Рекурсивний спуск: AST-вузли та Boolean-парсер."""
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Literal
+from .index import Index
 import re
 from .tokenize import tokenize
 
-def _merge_sorted(left, right, *, union=False):
+def _merge_sorted(left: set[str], right: set[str], *, union: bool = False) -> set[str]:
     a, b = sorted(left), sorted(right)
     i = j = 0; result = []
     while i < len(a) and j < len(b):
@@ -21,19 +23,19 @@ def _merge_sorted(left, right, *, union=False):
     return set(result)
 
 class QueryNode:
-    def __and__(self, other): return And(self, other)
-    def __or__(self, other): return Or(self, other)
-    def __invert__(self): return Not(self)
+    def __and__(self, other: QueryNode) -> QueryNode: return And(self, other)
+    def __or__(self, other: QueryNode) -> QueryNode: return Or(self, other)
+    def __invert__(self) -> QueryNode: return Not(self)
 
 @dataclass(frozen=True)
 class Term(QueryNode):
     value: str
-    def evaluate(self, index, engine="set"): return {p.doc_id for p in index.get(self.value.casefold(), ())}
+    def evaluate(self, index: Index, engine: Literal["merge", "set"] = "set") -> set[str]: return {p.doc_id for p in index.get(self.value.casefold(), ())}
 
 @dataclass(frozen=True)
 class Phrase(QueryNode):
     value: str
-    def evaluate(self, index, engine="set"):
+    def evaluate(self, index: Index, engine: Literal["merge", "set"] = "set") -> set[str]:
         terms = list(tokenize(self.value))
         if not terms: return set()
         if len(terms) == 1: return Term(terms[0]).evaluate(index, engine)
@@ -51,21 +53,21 @@ class Phrase(QueryNode):
 @dataclass(frozen=True)
 class And(QueryNode):
     left: QueryNode; right: QueryNode
-    def evaluate(self, index, engine="set"):
+    def evaluate(self, index: Index, engine: Literal["merge", "set"] = "set") -> set[str]:
         left, right = self.left.evaluate(index, engine), self.right.evaluate(index, engine)
         return _merge_sorted(left, right) if engine == "merge" else left & right
 
 @dataclass(frozen=True)
 class Or(QueryNode):
     left: QueryNode; right: QueryNode
-    def evaluate(self, index, engine="set"):
+    def evaluate(self, index: Index, engine: Literal["merge", "set"] = "set") -> set[str]:
         left, right = self.left.evaluate(index, engine), self.right.evaluate(index, engine)
         return _merge_sorted(left, right, union=True) if engine == "merge" else left | right
 
 @dataclass(frozen=True)
 class Not(QueryNode):
     child: QueryNode
-    def evaluate(self, index, engine="set"): return set(index.documents) - self.child.evaluate(index, engine)
+    def evaluate(self, index: Index, engine: Literal["merge", "set"] = "set") -> set[str]: return set(index.documents) - self.child.evaluate(index, engine)
 
 _TOKEN_RE = re.compile(r'\s*(AND\b|OR\b|NOT\b|\(|\)|"[^"]*"|[^\s()"]+)', re.IGNORECASE)
 class QuerySyntaxError(ValueError): pass
