@@ -101,6 +101,14 @@ def build_partial(paths: list[str], corpus_root: str, store_positions: bool = Tr
     def read_documents() -> Iterator[Document]:
         for raw_path in paths:
             path = Path(raw_path)
+            if path.suffix.lower() == ".jsonl":
+                with path.open(encoding="utf-8") as stream:
+                    for line_number, line in enumerate(stream, 1):
+                        if not line.strip():
+                            continue
+                        record = json.loads(line)
+                        yield Document(str(record.get("url") or f"{path.name}:{line_number}"), str(path), str(record.get("text", "")))
+                continue
             try:
                 content = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
@@ -142,7 +150,7 @@ def build_index(
         raise ValueError("workers має бути не менше 1")
     if executor not in {"serial", "threads", "processes"}:
         raise ValueError("executor має бути serial, threads або processes")
-    paths = sorted(str(path) for path in root.rglob("*") if path.is_file() and path.suffix.lower() in {".txt", ".md"})
+    paths = sorted(str(path) for path in root.rglob("*") if path.is_file() and path.suffix.lower() in {".txt", ".md", ".jsonl"})
     if not paths:
         return Index({}, {}, {})
     if executor == "serial":

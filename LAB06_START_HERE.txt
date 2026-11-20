@@ -1,0 +1,38 @@
+ЛАБОРАТОРНА РОБОТА №6 — ASYNCIO CRAWLER
+
+Це продовження findex (лабораторні 1–5). Старі модулі індексації, пошуку, ранжування, тести та benchmark лабораторної 5 збережені.
+
+1. Встановлення залежностей:
+   uv sync --group dev
+
+2. Запуск тестів лабораторної 6:
+   uv run pytest -q tests/test_lab06.py
+
+3. Benchmark на локальному тестовому дзеркалі (200 сторінок, 3 повтори, concurrency 1/5/20):
+   uv run python scripts/benchmark_crawler.py --repeats 3 --output crawler_benchmark.csv
+   Живі зовнішні сайти в benchmark не використовуються.
+
+4. Краулінг дозволеного сайту:
+   uv run findex crawl https://YOUR-OWN-OR-ALLOWED-SITE/ --max-pages 200 --concurrency 5 --per-host-concurrency 2 --delay 0.15 --out data/crawled.jsonl --log crawl.log
+   Замініть URL лише на власний сайт, сайт із явним дозволом або локальне дзеркало. Перевірте robots.txt та умови сайту перед запуском.
+   User-Agent містить URL репозиторію для зв'язку. Не збільшуйте ліміти без дозволу.
+
+5. Побудова індексу з JSONL після завершення краулера:
+   uv run findex index data --out index.bin
+
+6. Пошук у зібраному індексі:
+   uv run findex search "async crawler" --index index.bin
+
+7. Повний набір тестів:
+   uv run pytest -q
+
+Файли лабораторної 6:
+- src/findex/crawler.py — asyncio краулер, robots cache, retry, pacing, семафори, JSONL.
+- src/findex/cli.py — команда findex crawl з live-лічильниками.
+- tests/test_lab06.py — тести з httpx.MockTransport без живої мережі.
+- scripts/benchmark_crawler.py — однаковий локальний benchmark на 200 сторінок для concurrency 1, 5, 20.
+- crawler_benchmark.csv — фактичні результати запуску benchmark у середовищі підготовки.
+- docs/crawler-reflection.md — відповіді на питання та аналіз HTTP 429.
+- docs/crawl.log — приклад фактичного логу повтору 429 → 200.
+
+Дозвіл/джерело для benchmark: вбудоване локальне тестове дзеркало LocalMirror у scripts/benchmark_crawler.py; жоден сторонній сайт не сканувався. Для реального crawl користувач має вказати власний сайт або сайт, на який має дозвіл, і перевірити його robots.txt.

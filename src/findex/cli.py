@@ -2,16 +2,21 @@
 from __future__ import annotations
 
 import json
+import asyncio
+import time
 import logging
 from pathlib import Path
 from typing import Annotated, Literal
 
 import typer
+import httpx
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from rich.table import Table
+from rich.live import Live
 
 from .index import build_index, load_index, save_index
+from .crawler import AsyncCrawler
 from .query import QuerySyntaxError
 from .ranking import BM25, TfIdf, search
 
@@ -54,6 +59,47 @@ def index_command(
         typer.echo(f"Помилка: {exc}", err=True)
         raise typer.Exit(code=1) from None
 
+
+
+@app.command("crawl")
+def crawl_command(
+    start_url: Annotated[str, typer.Argument(help="Початкова URL-адреса дозволеного сайту")],
+    output: Annotated[Path, typer.Option("--out", "-o", help="JSONL файл сторінок")]=Path("data/crawled.jsonl"),
+    max_pages: Annotated[int, typer.Option("--max-pages", min=1, help="Жорстка межа сторінок")]=200,
+    concurrency: Annotated[int, typer.Option("--concurrency", min=1, help="Одночасні мережеві запити")]=5,
+    per_host_concurrency: Annotated[int, typer.Option("--per-host-concurrency", min=1, help="Одночасні запити до одного хоста")]=2,
+    delay: Annotated[float, typer.Option("--delay", min=0, help="Мінімальна пауза для одного хоста")]=0.15,
+    user_agent: Annotated[str, typer.Option("--user-agent", help="Чесний User-Agent з URL або контактом") ]="findex-student-crawler/1.0 (+https://github.com/9324749-cmd/findex)",
+    log_path: Annotated[Path, typer.Option("--log", help="Лог усіх URL")]=Path("crawl.log"),
+) -> None:
+    """Асинхронно обійти дозволений сайт і записати сторінки у JSONL."""
+    async def run() -> int:
+        crawler = AsyncCrawler(concurrency=concurrency, per_host_concurrency=per_host_concurrency, delay=delay, user_agent=user_agent, log_path=log_path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        count = 0
+        started = time.perf_counter()
+        with output.open("w", encoding="utf-8") as stream, Live(console=console, refresh_per_second=8) as live:
+            async for page in crawler.crawl(start_url, max_pages=max_pages):
+                stream.write(json.dumps(page.json_record(), ensure_ascii=False) + "\n")
+                stream.flush()
+                count += 1
+                elapsed = max(time.perf_counter() - started, 1e-9)
+                panel = Table(title="findex async crawler")
+                panel.add_column("Показник")
+                panel.add_column("Значення", justify="right")
+                panel.add_row("Зібрано сторінок", str(count))
+                panel.add_row("Швидкість", f"{count/elapsed:.2f} стор./с")
+                panel.add_row("Активні запити", str(crawler.active))
+                panel.add_row("Помилки", str(crawler.errors))
+                panel.add_row("Глибина черги", str(crawler.queue_depth))
+                live.update(panel)
+        return count
+    try:
+        count = asyncio.run(run())
+        console.print(f"[green]Краулер завершив роботу:[/green] {count} сторінок → {output}; лог: {log_path}")
+    except (OSError, ValueError, httpx.HTTPError) as exc:
+        typer.echo(f"Помилка краулера: {exc}", err=True)
+        raise typer.Exit(code=1) from None
 
 @app.command("search")
 def search_command(
